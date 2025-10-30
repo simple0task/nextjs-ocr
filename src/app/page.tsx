@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { createWorker } from 'tesseract.js';
 
 export default function Home() {
@@ -128,9 +129,17 @@ export default function Home() {
   return (
     <div className="min-h-screen p-8 pb-20 sm:p-20 font-sans">
       <main className="max-w-4xl mx-auto">
-        <h1 className="text-4xl font-bold text-center mb-8">
-          画像・PDFから文字を抽出 (OCR)
-        </h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-4xl font-bold">
+            画像・PDFから文字を抽出 (OCR)
+          </h1>
+          <Link
+            href="/document-ai"
+            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            Document AI →
+          </Link>
+        </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
           <div className="mb-6">
