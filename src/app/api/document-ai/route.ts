@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GOOGLE_CLOUD_LOCATION;
     const processorId = process.env.GOOGLE_CLOUD_PROCESSOR_ID;
+    const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
 
     if (!projectId || !location || !processorId) {
       return NextResponse.json(
@@ -30,7 +31,26 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(bytes);
 
     // Document AI クライアントの初期化
-    const client = new DocumentProcessorServiceClient();
+    // Vercel環境ではJSONを直接パース、ローカル環境ではファイルパスを使用
+    let client: DocumentProcessorServiceClient;
+
+    if (credentials) {
+      try {
+        // JSONとしてパースを試みる（Vercel用）
+        const credentialsJson = JSON.parse(credentials);
+        client = new DocumentProcessorServiceClient({
+          credentials: credentialsJson,
+        });
+      } catch {
+        // パースに失敗したらファイルパスとして扱う（ローカル用）
+        client = new DocumentProcessorServiceClient({
+          keyFilename: credentials,
+        });
+      }
+    } else {
+      // 環境変数が未設定の場合はデフォルト認証を使用
+      client = new DocumentProcessorServiceClient();
+    }
 
     // プロセッサー名を構築
     const name = `projects/${projectId}/locations/${location}/processors/${processorId}`;
