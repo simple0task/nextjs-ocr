@@ -75,16 +75,39 @@ export async function POST(request: NextRequest) {
 
     // テキストとエンティティを抽出
     const text = document.text || '';
+
+    // エンティティを抽出（より詳細な情報を含む）
     const entities = document.entities?.map((entity) => ({
       type: entity.type || '',
       mentionText: entity.mentionText || '',
       confidence: entity.confidence || 0,
       normalizedValue: entity.normalizedValue?.text || '',
+      // ページ情報も含める
+      pageAnchor: entity.pageAnchor?.pageRefs?.[0]?.page || 0,
+    })) || [];
+
+    // フォームフィールド（Form Parserの場合）
+    const formFields = document.pages?.[0]?.formFields?.map((field) => ({
+      fieldName: field.fieldName?.textAnchor?.content || '',
+      fieldValue: field.fieldValue?.textAnchor?.content || '',
+      confidence: field.fieldValue?.confidence || 0,
+    })) || [];
+
+    // テーブル（表形式データ）
+    const tables = document.pages?.[0]?.tables?.map((table) => ({
+      headerRows: table.headerRows?.map((row) =>
+        row.cells?.map((cell) => cell.layout?.textAnchor?.content?.trim() || '')
+      ) || [],
+      bodyRows: table.bodyRows?.map((row) =>
+        row.cells?.map((cell) => cell.layout?.textAnchor?.content?.trim() || '')
+      ) || [],
     })) || [];
 
     return NextResponse.json({
       text: text.trim(),
       entities,
+      formFields,
+      tables,
       success: true,
     });
   } catch (error) {

@@ -8,12 +8,26 @@ interface Entity {
   mentionText: string;
   confidence: number;
   normalizedValue: string;
+  pageAnchor: number;
+}
+
+interface FormField {
+  fieldName: string;
+  fieldValue: string;
+  confidence: number;
+}
+
+interface Table {
+  headerRows: string[][];
+  bodyRows: string[][];
 }
 
 export default function DocumentAIPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [extractedText, setExtractedText] = useState<string>('');
   const [entities, setEntities] = useState<Entity[]>([]);
+  const [formFields, setFormFields] = useState<FormField[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
@@ -23,6 +37,8 @@ export default function DocumentAIPage() {
       setSelectedFile(file);
       setExtractedText('');
       setEntities([]);
+      setFormFields([]);
+      setTables([]);
       setError('');
     }
   };
@@ -34,6 +50,8 @@ export default function DocumentAIPage() {
     setError('');
     setExtractedText('');
     setEntities([]);
+    setFormFields([]);
+    setTables([]);
 
     try {
       const formData = new FormData();
@@ -52,6 +70,8 @@ export default function DocumentAIPage() {
 
       setExtractedText(data.text);
       setEntities(data.entities || []);
+      setFormFields(data.formFields || []);
+      setTables(data.tables || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'エラーが発生しました');
     } finally {
@@ -116,9 +136,95 @@ export default function DocumentAIPage() {
           </div>
         )}
 
+        {formFields.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+            <h2 className="text-2xl font-semibold mb-4">フォームフィールド</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b dark:border-gray-700">
+                    <th className="text-left py-2 px-4">フィールド名</th>
+                    <th className="text-left py-2 px-4">値</th>
+                    <th className="text-right py-2 px-4">信頼度</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {formFields.map((field, index) => (
+                    <tr
+                      key={index}
+                      className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900"
+                    >
+                      <td className="py-2 px-4 font-medium">{field.fieldName}</td>
+                      <td className="py-2 px-4">{field.fieldValue}</td>
+                      <td className="py-2 px-4 text-right">
+                        <span
+                          className={`inline-block px-2 py-1 rounded text-xs ${
+                            field.confidence > 0.9
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : field.confidence > 0.7
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                          }`}
+                        >
+                          {(field.confidence * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {tables.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+            <h2 className="text-2xl font-semibold mb-4">抽出されたテーブル</h2>
+            {tables.map((table, tableIndex) => (
+              <div key={tableIndex} className="mb-6 overflow-x-auto">
+                <table className="w-full text-sm border-collapse border border-gray-300 dark:border-gray-700">
+                  {table.headerRows.length > 0 && (
+                    <thead className="bg-gray-100 dark:bg-gray-900">
+                      {table.headerRows.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, cellIndex) => (
+                            <th
+                              key={cellIndex}
+                              className="border border-gray-300 dark:border-gray-700 py-2 px-4 text-left font-semibold"
+                            >
+                              {cell}
+                            </th>
+                          ))}
+                        </tr>
+                      ))}
+                    </thead>
+                  )}
+                  <tbody>
+                    {table.bodyRows.map((row, rowIndex) => (
+                      <tr
+                        key={rowIndex}
+                        className={rowIndex % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'}
+                      >
+                        {row.map((cell, cellIndex) => (
+                          <td
+                            key={cellIndex}
+                            className="border border-gray-300 dark:border-gray-700 py-2 px-4"
+                          >
+                            {cell}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        )}
+
         {entities.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-4">抽出されたエンティティ</h2>
+            <h2 className="text-2xl font-semibold mb-4">抽出されたエンティティ (Invoice Parser)</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
