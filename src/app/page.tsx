@@ -83,7 +83,7 @@ export default function Home() {
       <main className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold">
-            Google Document AI - Form Parser
+            Google Document AI - Custom Extractor
           </h1>
         </div>
 
@@ -93,7 +93,7 @@ export default function Home() {
               htmlFor="file-upload"
               className="block text-sm font-medium mb-2"
             >
-              請求書・領収書・フォームファイルを選択してください (PDF, 画像)
+              注文書を選択してください (PDF, 画像)
             </label>
             <input
               id="file-upload"
