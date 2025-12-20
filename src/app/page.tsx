@@ -2,31 +2,36 @@
 
 import { useState } from 'react';
 
-interface Entity {
+// Custom Extractor用の階層構造エンティティ
+interface ExtractedEntity {
   type: string;
-  mentionText: string;
+  value: string;
   confidence: number;
   normalizedValue: string;
-  pageAnchor: number;
+  page: number;
+  properties: ExtractedEntity[];
 }
 
-interface FormField {
-  fieldName: string;
-  fieldValue: string;
-  confidence: number;
-}
+// ヘッダーフィールドのタイプ
+const HEADER_FIELDS = ['address', 'name', 'delivery_phone_number', 'order_date', 'order_number'];
 
-interface Table {
-  headerRows: string[][];
-  bodyRows: string[][];
-}
+// 明細テーブルのカラム定義
+const ITEM_COLUMNS = [
+  { key: 'jan_code', label: 'JANコード', align: 'left' },
+  { key: 'product_code', label: 'コード', align: 'left' },
+  { key: 'product_name', label: '品名・規格', align: 'left' },
+  { key: 'quantity_per_case', label: '入数', align: 'right' },
+  { key: 'box_count', label: 'BOX数', align: 'right' },
+  { key: 'case_count', label: 'ケース', align: 'right' },
+  { key: 'quantity', label: '数量', align: 'right' },
+  { key: 'unit_price', label: '単価', align: 'right' },
+  { key: 'amount', label: '金額', align: 'right' },
+  { key: 'delivery_date', label: '納期/備考', align: 'left' },
+] as const;
 
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [extractedText, setExtractedText] = useState<string>('');
-  const [entities, setEntities] = useState<Entity[]>([]);
-  const [formFields, setFormFields] = useState<FormField[]>([]);
-  const [tables, setTables] = useState<Table[]>([]);
+  const [entities, setEntities] = useState<ExtractedEntity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
 
@@ -34,10 +39,7 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-      setExtractedText('');
       setEntities([]);
-      setFormFields([]);
-      setTables([]);
       setError('');
     }
   };
@@ -47,10 +49,7 @@ export default function Home() {
 
     setIsLoading(true);
     setError('');
-    setExtractedText('');
     setEntities([]);
-    setFormFields([]);
-    setTables([]);
 
     try {
       const formData = new FormData();
@@ -67,10 +66,7 @@ export default function Home() {
         throw new Error(data.error || 'Document AI処理に失敗しました');
       }
 
-      setExtractedText(data.text);
       setEntities(data.entities || []);
-      setFormFields(data.formFields || []);
-      setTables(data.tables || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'エラーが発生しました');
     } finally {
@@ -78,12 +74,70 @@ export default function Home() {
     }
   };
 
+  // JSONからヘッダー情報を抽出（トップレベル）
+  const headerEntities = entities.filter(e => HEADER_FIELDS.includes(e.type));
+
+  // JSONからrecipient_companyを抽出し、そのpropertiesからname, addressを取得
+  const recipientCompany = entities.find(e => e.type === 'recipient_company');
+  const recipientProperties = recipientCompany?.properties.filter(p =>
+    ['name', 'address'].includes(p.type)
+  ) || [];
+
+  // ヘッダー情報とrecipient_companyのpropertiesを結合
+  const allHeaderEntities = [...headerEntities, ...recipientProperties];
+
+  // JSONから明細行（items）を抽出
+  const itemEntities = entities.filter(e => e.type === 'item');
+
+  // itemのpropertiesから値を取得するヘルパー
+  const getPropertyValue = (item: ExtractedEntity, key: string): string => {
+    const prop = item.properties.find(p => p.type === key);
+    return prop?.value || prop?.normalizedValue || '-';
+  };
+
+  // CSVダウンロード処理
+  const handleDownloadCsv = () => {
+    if (itemEntities.length === 0) return;
+
+    // BOM付きUTF-8でExcelでも文字化けしないようにする
+    const BOM = '\uFEFF';
+
+    // ヘッダー行
+    const headers = ITEM_COLUMNS.map(col => col.label);
+
+    // データ行
+    const rows = itemEntities.map(item =>
+      ITEM_COLUMNS.map(col => {
+        const value = getPropertyValue(item, col.key);
+        // カンマや改行を含む場合はダブルクォートで囲む
+        if (value.includes(',') || value.includes('\n') || value.includes('"')) {
+          return `"${value.replace(/"/g, '""')}"`;
+        }
+        return value;
+      })
+    );
+
+    // CSV文字列を作成
+    const csvContent = BOM + [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+
+    // ダウンロード
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `明細一覧_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="min-h-screen p-8 pb-20 sm:p-20 font-sans">
       <main className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-4xl font-bold">
-            Google Document AI - Custom Extractor
+            Fuji Grace 注文書読み取りデモ
           </h1>
         </div>
 
@@ -93,7 +147,7 @@ export default function Home() {
               htmlFor="file-upload"
               className="block text-sm font-medium mb-2"
             >
-              注文書を選択してください (PDF, 画像)
+              注文書を選択してください (PDF)
             </label>
             <input
               id="file-upload"
@@ -118,7 +172,7 @@ export default function Home() {
             disabled={!selectedFile || isLoading}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
           >
-            {isLoading ? '処理中...' : 'Document AIで解析'}
+            {isLoading ? '処理中...' : 'Google Document AIで解析'}
           </button>
         </div>
 
@@ -129,144 +183,79 @@ export default function Home() {
           </div>
         )}
 
-        {formFields.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-4">フォームフィールド</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b dark:border-gray-700">
-                    <th className="text-left py-2 px-4">フィールド名</th>
-                    <th className="text-left py-2 px-4">値</th>
-                    <th className="text-right py-2 px-4">信頼度</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {formFields.map((field, index) => (
-                    <tr
-                      key={index}
-                      className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900"
-                    >
-                      <td className="py-2 px-4 font-medium">{field.fieldName}</td>
-                      <td className="py-2 px-4">{field.fieldValue}</td>
-                      <td className="py-2 px-4 text-right">
-                        <span
-                          className={`inline-block px-2 py-1 rounded text-xs ${
-                            field.confidence > 0.9
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                              : field.confidence > 0.7
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                          }`}
-                        >
-                          {(field.confidence * 100).toFixed(1)}%
-                        </span>
-                      </td>
-                    </tr>
+        {entities.length > 0 && (
+          <>
+            {/* ヘッダー情報（JSONから動的生成） */}
+            {allHeaderEntities.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+                <h2 className="text-2xl font-semibold mb-4">注文書情報</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {allHeaderEntities.map((entity, index) => (
+                    <div key={index} className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg">
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                        {entity.type}
+                      </div>
+                      <div className="font-medium whitespace-pre-line">
+                        {entity.value || entity.normalizedValue || '-'}
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+                </div>
+              </div>
+            )}
 
-        {tables.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-4">抽出されたテーブル</h2>
-            {tables.map((table, tableIndex) => (
-              <div key={tableIndex} className="mb-6 overflow-x-auto">
-                <table className="w-full text-sm border-collapse border border-gray-300 dark:border-gray-700">
-                  {table.headerRows.length > 0 && (
+            {/* 明細テーブル（JSONから動的生成） */}
+            {itemEntities.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-2xl font-semibold">明細一覧（{itemEntities.length}件）</h2>
+                  <button
+                    onClick={handleDownloadCsv}
+                    className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors text-sm"
+                  >
+                    CSVダウンロード
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse border border-gray-300 dark:border-gray-700">
                     <thead className="bg-gray-100 dark:bg-gray-900">
-                      {table.headerRows.map((row, rowIndex) => (
-                        <tr key={rowIndex}>
-                          {row.map((cell, cellIndex) => (
-                            <th
-                              key={cellIndex}
-                              className="border border-gray-300 dark:border-gray-700 py-2 px-4 text-left font-semibold"
+                      <tr>
+                        {ITEM_COLUMNS.map((col) => (
+                          <th
+                            key={col.key}
+                            className={`border border-gray-300 dark:border-gray-700 py-2 px-3 font-semibold ${
+                              col.align === 'right' ? 'text-right' : 'text-left'
+                            }`}
+                          >
+                            {col.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {itemEntities.map((item, rowIndex) => (
+                        <tr
+                          key={rowIndex}
+                          className={rowIndex % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'}
+                        >
+                          {ITEM_COLUMNS.map((col) => (
+                            <td
+                              key={col.key}
+                              className={`border border-gray-300 dark:border-gray-700 py-2 px-3 ${
+                                col.align === 'right' ? 'text-right' : 'text-left'
+                              }`}
                             >
-                              {cell}
-                            </th>
+                              {getPropertyValue(item, col.key)}
+                            </td>
                           ))}
                         </tr>
                       ))}
-                    </thead>
-                  )}
-                  <tbody>
-                    {table.bodyRows.map((row, rowIndex) => (
-                      <tr
-                        key={rowIndex}
-                        className={rowIndex % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-900'}
-                      >
-                        {row.map((cell, cellIndex) => (
-                          <td
-                            key={cellIndex}
-                            className="border border-gray-300 dark:border-gray-700 py-2 px-4"
-                          >
-                            {cell}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {entities.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-2xl font-semibold mb-4">抽出されたエンティティ</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b dark:border-gray-700">
-                    <th className="text-left py-2 px-4">タイプ</th>
-                    <th className="text-left py-2 px-4">値</th>
-                    <th className="text-left py-2 px-4">正規化値</th>
-                    <th className="text-right py-2 px-4">信頼度</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {entities.map((entity, index) => (
-                    <tr
-                      key={index}
-                      className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-900"
-                    >
-                      <td className="py-2 px-4 font-medium">{entity.type}</td>
-                      <td className="py-2 px-4">{entity.mentionText}</td>
-                      <td className="py-2 px-4 text-gray-600 dark:text-gray-400">
-                        {entity.normalizedValue || '-'}
-                      </td>
-                      <td className="py-2 px-4 text-right">
-                        <span
-                          className={`inline-block px-2 py-1 rounded text-xs ${
-                            entity.confidence > 0.9
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                              : entity.confidence > 0.7
-                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                          }`}
-                        >
-                          {(entity.confidence * 100).toFixed(1)}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {extractedText && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-            <h2 className="text-2xl font-semibold mb-4">抽出されたテキスト</h2>
-            <div className="bg-gray-100 dark:bg-gray-900 rounded-lg p-4 font-mono text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">
-              {extractedText}
-            </div>
-          </div>
+            )}
+          </>
         )}
       </main>
     </div>

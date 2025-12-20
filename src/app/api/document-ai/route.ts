@@ -1,5 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DocumentProcessorServiceClient } from '@google-cloud/documentai';
+import { google } from '@google-cloud/documentai/build/protos/protos';
+
+type ITextAnchor = google.cloud.documentai.v1.Document.ITextAnchor;
+type IEntity = google.cloud.documentai.v1.Document.IEntity;
+
+// textAnchorからテキストを抽出するヘルパー関数
+function extractTextFromAnchor(textAnchor: ITextAnchor | null | undefined, fullText: string): string {
+  if (!textAnchor?.textSegments || textAnchor.textSegments.length === 0) {
+    return '';
+  }
+
+  return textAnchor.textSegments
+    .map((segment) => {
+      const startIndex = Number(segment.startIndex || 0);
+      const endIndex = Number(segment.endIndex || 0);
+      return fullText.substring(startIndex, endIndex);
+    })
+    .join('')
+    .trim();
+}
+
+// Custom Extractor用: エンティティを再帰的に処理してフラットな構造に変換
+interface ExtractedEntity {
+  type: string;
+  value: string;
+  confidence: number;
+  normalizedValue: string;
+  page: number;
+  properties: ExtractedEntity[];
+}
+
+function processEntity(entity: IEntity, fullText: string): ExtractedEntity {
+  // mentionTextがあればそれを使用、なければtextAnchorから抽出
+  const value = entity.mentionText || extractTextFromAnchor(entity.textAnchor, fullText);
+
+  return {
+    type: entity.type || '',
+    value,
+    confidence: entity.confidence || 0,
+    normalizedValue: entity.normalizedValue?.text || '',
+    page: Number(entity.pageAnchor?.pageRefs?.[0]?.page || 0) + 1,
+    properties: entity.properties?.map(prop => processEntity(prop, fullText)) || [],
+  };
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,6 +62,7 @@ export async function POST(request: NextRequest) {
     const location = process.env.GOOGLE_CLOUD_LOCATION;
     const processorId = process.env.GOOGLE_CLOUD_PROCESSOR_ID;
     const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    const versionId = process.env.GOOGLE_CLOUD_VERSION_ID;
 
     if (!projectId || !location || !processorId) {
       return NextResponse.json(
@@ -52,8 +97,8 @@ export async function POST(request: NextRequest) {
       client = new DocumentProcessorServiceClient();
     }
 
-    // プロセッサー名を構築
-    const name = `projects/${projectId}/locations/${location}/processors/${processorId}`;
+    // プロセッサー名を構築（バージョン指定あり）
+    const name = `projects/${projectId}/locations/${location}/processors/${processorId}/processorVersions/${versionId}`;
 
     // ドキュメント処理リクエスト
     const [result] = await client.processDocument({
@@ -74,40 +119,16 @@ export async function POST(request: NextRequest) {
     }
 
     // テキストとエンティティを抽出
-    const text = document.text || '';
+    const fullText = document.text || '';
 
-    // エンティティを抽出（より詳細な情報を含む）
-    const entities = document.entities?.map((entity) => ({
-      type: entity.type || '',
-      mentionText: entity.mentionText || '',
-      confidence: entity.confidence || 0,
-      normalizedValue: entity.normalizedValue?.text || '',
-      // ページ情報も含める
-      pageAnchor: entity.pageAnchor?.pageRefs?.[0]?.page || 0,
-    })) || [];
-
-    // フォームフィールド（Form Parserの場合）
-    const formFields = document.pages?.[0]?.formFields?.map((field) => ({
-      fieldName: field.fieldName?.textAnchor?.content || '',
-      fieldValue: field.fieldValue?.textAnchor?.content || '',
-      confidence: field.fieldValue?.confidence || 0,
-    })) || [];
-
-    // テーブル（表形式データ）
-    const tables = document.pages?.[0]?.tables?.map((table) => ({
-      headerRows: table.headerRows?.map((row) =>
-        row.cells?.map((cell) => cell.layout?.textAnchor?.content?.trim() || '')
-      ) || [],
-      bodyRows: table.bodyRows?.map((row) =>
-        row.cells?.map((cell) => cell.layout?.textAnchor?.content?.trim() || '')
-      ) || [],
-    })) || [];
+    // Custom Extractor用: エンティティを階層構造で抽出
+    // items（明細行）の中にjan_code, product_codeなどがネストされる
+    const entities = document.entities?.map((entity) => processEntity(entity, fullText)) || [];
 
     return NextResponse.json({
-      text: text.trim(),
+      text: fullText.trim(),
       entities,
-      formFields,
-      tables,
+      pageCount: document.pages?.length || 0,
       success: true,
     });
   } catch (error) {
