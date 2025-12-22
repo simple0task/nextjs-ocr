@@ -1,12 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "Bash(npm install:*)",
-      "Bash(mkdir:*)",
-      "Bash(npm run build:*)",
-      "Bash(npm run lint)",
-      "Bash(rm:*)"
-    ],
+    "defaultMode": "acceptEdits",
     "deny": [],
     "ask": []
   }

@@ -45,10 +45,20 @@ function processEntity(entity: IEntity, fullText: string): ExtractedEntity {
   };
 }
 
+// プロセッサタイプの定義
+type ProcessorType = 'sannote' | 'yac';
+
+// プロセッサマッピング
+const PROCESSOR_MAP: Record<ProcessorType, string | undefined> = {
+  sannote: process.env.GOOGLE_CLOUD_SANNOTE_PROCESSOR_ID,
+  yac: process.env.GOOGLE_CLOUD_YAC_PROCESSOR_ID,
+};
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File;
+    const processorType = (formData.get('processorType') as ProcessorType) || 'sannote';
 
     if (!file) {
       return NextResponse.json(
@@ -57,12 +67,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // プロセッサタイプの検証
+    if (!['sannote', 'yac'].includes(processorType)) {
+      return NextResponse.json(
+        { error: '無効なプロセッサタイプです。sannoteまたはyacを指定してください。' },
+        { status: 400 }
+      );
+    }
+
     // 環境変数の確認
     const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
     const location = process.env.GOOGLE_CLOUD_LOCATION;
-    const processorId = process.env.GOOGLE_CLOUD_PROCESSOR_ID;
+    const processorId = PROCESSOR_MAP[processorType];
     const credentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    const versionId = process.env.GOOGLE_CLOUD_VERSION_ID;
+    // const versionId = process.env.GOOGLE_CLOUD_VERSION_ID;
 
     if (!projectId || !location || !processorId) {
       return NextResponse.json(
@@ -97,8 +115,11 @@ export async function POST(request: NextRequest) {
       client = new DocumentProcessorServiceClient();
     }
 
-    // プロセッサー名を構築（バージョン指定あり）
-    const name = `projects/${projectId}/locations/${location}/processors/${processorId}/processorVersions/${versionId}`;
+    // プロセッサー名を構築
+    const name = `projects/${projectId}/locations/${location}/processors/${processorId}`;
+
+    // バージョン指定する場合は以下の形式を使用
+    // const name = 'projects/' + projectId + '/locations/' + location + '/processors/' + processorId + '/processorVersions/' + versionId;
 
     // ドキュメント処理リクエスト
     const [result] = await client.processDocument({

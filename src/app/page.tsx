@@ -29,11 +29,14 @@ const ITEM_COLUMNS = [
   { key: 'delivery_date', label: '納期/備考', align: 'left' },
 ] as const;
 
+type ProcessorType = 'sannote' | 'yac';
+
 export default function Home() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [entities, setEntities] = useState<ExtractedEntity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  const [processorType, setProcessorType] = useState<ProcessorType>('sannote');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,6 +57,7 @@ export default function Home() {
     try {
       const formData = new FormData();
       formData.append('file', selectedFile);
+      formData.append('processorType', processorType);
 
       const response = await fetch('/api/document-ai', {
         method: 'POST',
@@ -158,11 +162,45 @@ export default function Home() {
             />
           </div>
 
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">
+              プロセッサタイプを選択してください
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="processorType"
+                  value="sannote"
+                  checked={processorType === 'sannote'}
+                  onChange={(e) => setProcessorType(e.target.value as ProcessorType)}
+                  className="mr-2"
+                />
+                <span className="text-sm">Sannote</span>
+              </label>
+              <label className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="processorType"
+                  value="yac"
+                  checked={processorType === 'yac'}
+                  onChange={(e) => setProcessorType(e.target.value as ProcessorType)}
+                  className="mr-2"
+                />
+                <span className="text-sm">YAC</span>
+              </label>
+            </div>
+          </div>
+
           {selectedFile && (
             <div className="mb-6 p-4 bg-gray-100 dark:bg-gray-900 rounded-lg">
               <p className="text-sm">
                 <span className="font-semibold">選択されたファイル:</span>{' '}
                 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
+              </p>
+              <p className="text-sm mt-2">
+                <span className="font-semibold">プロセッサ:</span>{' '}
+                {processorType === 'sannote' ? 'Sannote' : 'YAC'}
               </p>
             </div>
           )}
