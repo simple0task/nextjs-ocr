@@ -164,7 +164,7 @@ export default function Home() {
 
           <div className="mb-6">
             <label className="block text-sm font-medium mb-2">
-              プロセッサタイプを選択してください
+              注文書タイプを選択してください
             </label>
             <div className="flex gap-4">
               <label className="flex items-center cursor-pointer">
@@ -176,7 +176,7 @@ export default function Home() {
                   onChange={(e) => setProcessorType(e.target.value as ProcessorType)}
                   className="mr-2"
                 />
-                <span className="text-sm">Sannote</span>
+                <span className="text-sm">サンノート株式会社</span>
               </label>
               <label className="flex items-center cursor-pointer">
                 <input
@@ -187,7 +187,7 @@ export default function Home() {
                   onChange={(e) => setProcessorType(e.target.value as ProcessorType)}
                   className="mr-2"
                 />
-                <span className="text-sm">YAC</span>
+                <span className="text-sm">槌屋YAC株式会社</span>
               </label>
             </div>
           </div>
@@ -198,17 +198,13 @@ export default function Home() {
                 <span className="font-semibold">選択されたファイル:</span>{' '}
                 {selectedFile.name} ({(selectedFile.size / 1024).toFixed(2)} KB)
               </p>
-              <p className="text-sm mt-2">
-                <span className="font-semibold">プロセッサ:</span>{' '}
-                {processorType === 'sannote' ? 'Sannote' : 'YAC'}
-              </p>
             </div>
           )}
 
           <button
             onClick={handleProcessDocument}
             disabled={!selectedFile || isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors"
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer text-white font-semibold py-3 px-6 rounded-lg transition-colors"
           >
             {isLoading ? '処理中...' : 'Google Document AIで解析'}
           </button>
