@@ -1,7 +1,16 @@
 {
   "permissions": {
-    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Bash",
+      "Glob",
+      "Grep",
+      "Skill(frontend-design)"
+    ],
     "deny": [],
-    "ask": []
+    "ask": [],
+    "defaultMode": "default"
   }
 }
